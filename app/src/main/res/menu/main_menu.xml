@@ -7,4 +7,19 @@
         android:orderInCategory="100"
         app:showAsAction="ifRoom" />
 
+    <item android:id="@+id/action_settings"
+        android:title="@string/menu_item_settings"
+        android:orderInCategory="100"
+        app:showAsAction="ifRoom" />
+
+    <item android:id="@+id/action_show_map"
+        android:title="@string/menu_item_show_map"
+        android:orderInCategory="100"
+        app:showAsAction="ifRoom" />
+
+    <item android:id="@+id/action_share"
+        android:title="Share"
+        app:showAsAction="ifRoom"
+        android:actionProviderClass="android.widget.ShareActionProvider" />
+
 </menu>

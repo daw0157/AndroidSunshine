@@ -1,11 +1,14 @@
 package example.com.sunshine;
 
 import android.content.Context;
-import android.graphics.Bitmap;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
+import android.support.v4.view.MenuItemCompat;
 import android.text.format.Time;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -17,7 +20,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
-import android.widget.Toast;
+import android.widget.ShareActionProvider;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -45,20 +48,28 @@ import java.util.Arrays;
 public class ForecastFragment extends Fragment {
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
+    public String EXTRA_FORECAST_STR = "EXTRA_FORECAST_STR";
     private static final String ARG_PARAM1 = "param1";
     private static final String ARG_PARAM2 = "param2";
     private String apiKey = "3143abfcd86d7258fd03be195bc7e09e";
     private HttpURLConnection urlConnection = null;
     private BufferedReader reader = null;
     public ArrayAdapter<String> adapter = null;
+    private ShareActionProvider myShareActionProvider;
     private String jsonStr;
-    private String[] forecast = {"Mon - Sunny - 64", "Tues - Cloud - 50", "Wed - Rain - 55", "Thurs - Cloud - 42", "Friday - Rain - 76"};
+
 
     // TODO: Rename and change types of parameters
     private String mParam1;
     private String mParam2;
 
     private OnFragmentInteractionListener mListener;
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        updateWeather();
+    }
 
     public ForecastFragment() {
         // Required empty public constructor
@@ -99,14 +110,13 @@ public class ForecastFragment extends Fragment {
         // Inflate the layout for this fragment
 
         View view = inflater.inflate(R.layout.fragment_main, container, false);
-        adapter = new ArrayAdapter<String>(getActivity(), R.layout.list_item_forecast, R.id.list_item_forecast_textview, new ArrayList<String>(Arrays.asList(forecast)));
+        adapter = new ArrayAdapter<String>(getActivity(), R.layout.list_item_forecast, R.id.list_item_forecast_textview, new ArrayList<String>());
         ListView listView = (ListView)view.findViewById(R.id.listview_forecast);
         listView.setAdapter(adapter);
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                String forecast = adapter.getItem(i);
-                Toast.makeText(getActivity(), forecast, Toast.LENGTH_LONG).show();
+                startActivity(new Intent(getActivity(), DetailActivity.class).putExtra(EXTRA_FORECAST_STR, adapter.getItem(i)));
             }
         });
         return view;
@@ -114,19 +124,63 @@ public class ForecastFragment extends Fragment {
 
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
+        MenuItem shareItem = menu.findItem(R.id.action_share);
+        myShareActionProvider = (ShareActionProvider)shareItem.getActionProvider();
         inflater.inflate(R.menu.main_menu, menu);
+    }
+
+    private void setShareIntent(Intent shareIntent){
+        if(myShareActionProvider != null){
+            myShareActionProvider.setShareIntent(shareIntent);
+        }
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        String zip = "94043";
+
         if(id == R.id.action_refresh){
-            FetchWeatherTask weatherTask = new FetchWeatherTask();
-            weatherTask.execute(zip);
+            updateWeather();
             return true;
         }
+        if(id == R.id.action_settings){
+            Intent intent = new Intent(getActivity(), SettingsActivity.class);
+            startActivity(intent);
+        }
+        if(id == R.id.action_show_map){
+            openPreferredLocationInMap();
+        }
+        if(id == R.id.action_share){
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_TEXT, "TEST");
+            setShareIntent(intent);
+        }
         return super.onOptionsItemSelected(item);
+    }
+
+    public void openPreferredLocationInMap(){
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+
+        Intent mapIntent = new Intent(Intent.ACTION_VIEW);
+        if(mapIntent.resolveActivity(getActivity().getPackageManager()) != null){
+            String location = preferences.getString(
+                    getString(R.string.pref_location_key),
+                    getString(R.string.pref_location_default));
+            Uri geoLocation = Uri.parse("geo:0,0?").buildUpon()
+                    .appendQueryParameter("q", location)
+                    .build();
+            mapIntent.setData(geoLocation);
+            startActivity(mapIntent);
+        }
+    }
+
+    public void updateWeather(){
+        FetchWeatherTask weatherTask = new FetchWeatherTask();
+        SharedPreferences preferences =PreferenceManager.getDefaultSharedPreferences(getActivity());
+        String zip = preferences.getString(getString(R.string.pref_location_key), getString(R.string.pref_location_default));
+        String units = preferences.getString(getString(R.string.pref_units_key), getString(R.string.pref_units_default));
+        weatherTask.execute(zip);
     }
 
     // TODO: Rename method, update argument and hook method into UI event
@@ -250,6 +304,18 @@ public class ForecastFragment extends Fragment {
          * Prepare the weather high/lows for presentation.
          */
         private String formatHighLows(double high, double low) {
+
+            SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+            String unitType = sharedPreferences.getString(
+                    getString(R.string.pref_units_key),
+                    getString(R.string.pref_units_default));
+
+            if(unitType.equals(getString(R.string.units_imperial))) {
+                high = (high * 1.8) + 32;
+                low = (low * 1.8) + 32;
+            } else if (!unitType.equals(getString(R.string.units_metric))){
+                Log.d(LOG_TAG, "Unit type not found: " + unitType);
+            }
             // For presentation, assume the user doesn't care about tenths of a degree.
             long roundedHigh = Math.round(high);
             long roundedLow = Math.round(low);
